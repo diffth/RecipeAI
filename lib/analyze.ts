@@ -6,6 +6,10 @@ import { macroRatio, type MacroRatio } from "./nutrition";
 // model and override with GEMINI_MODEL.
 export const DEFAULT_MODEL = "gemini-3.8-flash";
 
+// At or above this, alternatives are dropped. Enforced in code because the model
+// still lists alternatives even when told not to.
+const CERTAIN_CONFIDENCE = 0.8;
+
 const num = { type: Type.NUMBER };
 const str = { type: Type.STRING };
 
@@ -86,7 +90,7 @@ const PROMPT = `너는 음식 사진을 분석하는 영양사다. 사진을 보
 
 - isFood: 사진의 주 피사체가 먹는 음식(요리)이면 true, 아니면 false. false면 나머지 필드는 빈 문자열/0/빈 배열로 채운다.
 - dish: 가장 가능성이 높은 요리 이름. nameKo는 한국어 통용 이름, nameEn은 영어 이름. confidence는 0~1 사이의 실제 확신 정도(애매하면 낮게).
-- alternatives: 다른 후보 요리 최대 3개(신뢰도 내림차순). 확실하면 빈 배열.
+- alternatives: 다른 후보 요리 최대 3개(신뢰도 내림차순). 각 confidence는 그 요리일 확률이며, dish.confidence와 모든 후보의 합이 1을 넘지 않게 한다. dish.confidence가 0.8 이상이면 빈 배열.
 - servingAssumption: 사진에 보이는 양을 기준으로 가정한 1인분 분량(예: "1인분 약 400g, 밥 1공기 포함").
 - nutrition: 그 분량 기준 추정치. calories(kcal), carbs/protein/fat/sugar/fiber(g), sodium(mg).
 - assessment: 한국어 영양 평가. summary는 1~2문장, highlights는 장점 1~3개, cautions는 주의점 0~3개. 각 항목은 짧게.
@@ -150,9 +154,10 @@ export async function analyzeFoodImage(
     throw new AnalyzeError("Gemini 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.", 502);
   }
 
-  parsed.alternatives = parsed.alternatives
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, 3);
+  parsed.alternatives =
+    parsed.dish.confidence >= CERTAIN_CONFIDENCE
+      ? []
+      : parsed.alternatives.sort((a, b) => b.confidence - a.confidence).slice(0, 3);
 
   return { ...parsed, macroRatio: macroRatio(parsed.nutrition), model };
 }

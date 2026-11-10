@@ -1,6 +1,6 @@
 # RecipeAI (MVP)
 
-요리 사진을 올리면 **요리 이름(신뢰도 포함)** 과 **1인분 영양 평가(칼로리·탄단지·당류·식이섬유·나트륨)** 를 보여 주는 Next.js 웹앱입니다. 인식과 영양 추정은 Gemini API가 하며, 영양 수치는 **AI 추정치**입니다.
+요리 사진을 올리면 **요리 이름(신뢰도 포함)** 과 **1인분 영양 평가(칼로리·탄단지·당류·식이섬유·나트륨)** 를 보여 주고, 버튼을 누르면 **레시피(재료·인분 조절·조리 순서·팁)** 까지 알려 주는 Next.js 웹앱입니다. 인식·영양 추정·레시피 생성은 Gemini API가 하며, 수치와 레시피는 **AI 추정·생성 결과**입니다.
 
 ## 실행 방법
 
@@ -32,9 +32,11 @@
 | `app/api/analyze/route.ts` | `POST /api/analyze` (multipart `image`), 형식·크기(8MB) 검증 |
 | `lib/analyze.ts` | Gemini 호출(structured output), zod 검증 |
 | `lib/nutrition.ts` | 탄단지 칼로리 비율 계산(4/4/9 kcal) |
+| `app/api/recipe/route.ts` | `POST /api/recipe` (JSON `nameKo` 등), 레시피 요청 |
+| `lib/recipe.ts` | Gemini 레시피 생성(2인분 기준), zod 검증 |
 
 `GEMINI_MODEL`을 비우면 `gemini-3.8-flash`를 씁니다. SDK가 `v1` API를 쓰기 때문에 `gemini-flash-latest` 같은 `-latest` 별칭은 동작하지 않습니다.
 
 ## 다음 단계 (범위 밖)
 
-레시피 생성, 기록 저장·로그인, 식약처 식품영양성분 DB 연동, 배포.
+기록 저장·로그인, 식약처 식품영양성분 DB 연동, 배포.

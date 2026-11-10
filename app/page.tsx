@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AnalysisResult } from "@/lib/analyze";
+import type { RecipeResult } from "@/lib/recipe";
 
 type State =
   | { kind: "idle" }
@@ -210,8 +211,150 @@ function ResultView({ r }: { r: AnalysisResult }) {
         )}
         <div className="mt-3 text-xs text-neutral-400">모델: {r.model}</div>
       </div>
+
+      {/* Keyed by the analysis so a new photo clears the previous recipe. */}
+      <RecipeSection key={`${r.dish.nameKo}|${r.servingAssumption}`} r={r} />
     </section>
   );
+}
+
+type RecipeState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  | { kind: "done"; recipe: RecipeResult };
+
+const MIN_SERVINGS = 1;
+const MAX_SERVINGS = 10;
+
+function RecipeSection({ r }: { r: AnalysisResult }) {
+  const [state, setState] = useState<RecipeState>({ kind: "idle" });
+  // null until the user adjusts it, so the recipe first shows the amounts it was written for
+  const [chosenServings, setServings] = useState<number | null>(null);
+
+  async function load() {
+    setState({ kind: "loading" });
+    try {
+      const res = await fetch("/api/recipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nameKo: r.dish.nameKo,
+          nameEn: r.dish.nameEn,
+          servingAssumption: r.servingAssumption,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `요청 실패 (${res.status})`);
+      setState({ kind: "done", recipe: json });
+    } catch (e) {
+      setState({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  if (state.kind !== "done") {
+    return (
+      <div className="rounded-2xl border border-neutral-200 p-4 sm:p-5 dark:border-neutral-800">
+        <button
+          onClick={load}
+          disabled={state.kind === "loading"}
+          className="w-full rounded-xl border border-emerald-600 py-3 font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+        >
+          {state.kind === "loading" ? "레시피를 만들고 있습니다…" : `🍳 ${r.dish.nameKo} 레시피 보기`}
+        </button>
+        {state.kind === "error" && (
+          <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+            {state.message}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const rc = state.recipe;
+  const servings = chosenServings ?? rc.servings;
+  const scale = servings / rc.servings;
+
+  return (
+    <div className="rounded-2xl border border-neutral-200 p-4 sm:p-5 dark:border-neutral-800">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+        <h3 className="text-lg font-bold">{rc.title} 레시피</h3>
+        <span className="text-sm text-neutral-500">
+          ⏱ 약 {Math.round(rc.timeMinutes)}분 · 난이도 {rc.difficulty}
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{rc.summary}</p>
+
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <h4 className="font-semibold">재료</h4>
+        <div className="flex items-center gap-2 text-sm">
+          <button
+            aria-label="인분 줄이기"
+            onClick={() => setServings(Math.max(MIN_SERVINGS, servings - 1))}
+            disabled={servings <= MIN_SERVINGS}
+            className="h-8 w-8 rounded-full border border-neutral-300 disabled:opacity-30 dark:border-neutral-700"
+          >
+            −
+          </button>
+          <span className="w-12 text-center font-semibold tabular-nums">{servings}인분</span>
+          <button
+            aria-label="인분 늘리기"
+            onClick={() => setServings(Math.min(MAX_SERVINGS, servings + 1))}
+            disabled={servings >= MAX_SERVINGS}
+            className="h-8 w-8 rounded-full border border-neutral-300 disabled:opacity-30 dark:border-neutral-700"
+          >
+            +
+          </button>
+        </div>
+      </div>
+      <ul className="mt-2 grid grid-cols-1 gap-x-6 text-sm sm:grid-cols-2">
+        {rc.ingredients.map((ing, i) => (
+          <li
+            key={i}
+            className="flex justify-between gap-2 border-b border-neutral-100 py-1.5 dark:border-neutral-900"
+          >
+            <span>{ing.name}</span>
+            <span className="whitespace-nowrap text-neutral-600 tabular-nums dark:text-neutral-400">
+              {ing.quantity == null ? ing.unit : `${formatQty(ing.quantity * scale)} ${ing.unit}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <h4 className="mt-5 font-semibold">조리 순서</h4>
+      <ol className="mt-2 space-y-2 text-sm">
+        {rc.steps.map((s, i) => (
+          <li key={i} className="flex gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-semibold text-white">
+              {i + 1}
+            </span>
+            <span className="pt-0.5">{s}</span>
+          </li>
+        ))}
+      </ol>
+
+      {rc.tips.length > 0 && (
+        <>
+          <h4 className="mt-5 font-semibold">사진처럼 만드는 팁</h4>
+          <ul className="mt-2 space-y-1 text-sm">
+            {rc.tips.map((t, i) => (
+              <li key={i}>💡 {t}</li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <div className="mt-4 text-xs text-neutral-400">
+        AI가 생성한 레시피입니다. 분량과 시간은 참고용입니다 · 모델: {rc.model}
+      </div>
+    </div>
+  );
+}
+
+// Kitchen-friendly rounding: whole numbers for big amounts, one decimal for spoons and cups.
+function formatQty(v: number) {
+  if (v >= 10) return String(Math.round(v));
+  return String(Math.round(v * 10) / 10);
 }
 
 function Macro({ color, label, g, pct }: { color: string; label: string; g: number; pct: number }) {

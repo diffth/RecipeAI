@@ -33,7 +33,7 @@
 | `lib/analyze.ts` | Gemini 호출(structured output), zod 검증 |
 | `lib/nutrition.ts` | 탄단지 칼로리 비율 계산(4/4/9 kcal) |
 
-`GEMINI_MODEL`을 비우면 `gemini-flash-latest` 별칭을 씁니다.
+`GEMINI_MODEL`을 비우면 `gemini-3.8-flash`를 씁니다. SDK가 `v1` API를 쓰기 때문에 `gemini-flash-latest` 같은 `-latest` 별칭은 동작하지 않습니다.
 
 ## 다음 단계 (범위 밖)
 

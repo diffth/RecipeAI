@@ -2,8 +2,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 import { macroRatio, type MacroRatio } from "./nutrition";
 
-// Stable alias that tracks Google's current Flash model; override with GEMINI_MODEL.
-export const DEFAULT_MODEL = "gemini-flash-latest";
+// The SDK calls the v1 API, where "-latest" aliases are not served; pin a concrete
+// model and override with GEMINI_MODEL.
+export const DEFAULT_MODEL = "gemini-3.8-flash";
 
 const num = { type: Type.NUMBER };
 const str = { type: Type.STRING };

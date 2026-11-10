@@ -46,66 +46,79 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-xl flex-1 px-4 py-8">
-      <h1 className="text-2xl font-bold">RecipeAI</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+    <main className="mx-auto w-full max-w-xl flex-1 px-4 py-6 sm:py-10 lg:max-w-6xl lg:px-8">
+      <h1 className="text-2xl font-bold sm:text-3xl">RecipeAI</h1>
+      <p className="mt-1 text-sm text-neutral-500 sm:text-base">
         요리 사진을 올리면 요리 이름과 영양 정보를 알려 드립니다.
       </p>
 
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && inputRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          pick(e.dataTransfer.files[0]);
-        }}
-        className={`mt-6 flex min-h-56 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition ${
-          dragging ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950" : "border-neutral-300 dark:border-neutral-700"
-        }`}
-      >
-        {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element -- local blob preview
-          <img src={preview} alt="선택한 요리 사진" className="max-h-96 w-full object-contain" />
-        ) : (
-          <div className="p-6 text-center text-neutral-500">
-            <div className="text-4xl">📷</div>
-            <div className="mt-2">사진을 찍거나 선택해 주세요</div>
-            <div className="text-xs">드래그해서 놓아도 됩니다 · JPG/PNG/WEBP/HEIC, 최대 8MB</div>
+      {/* Desktop: upload on the left (sticky), results on the right. Mobile: one column. */}
+      <div className="lg:mt-8 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start lg:gap-8">
+        <div className="lg:sticky lg:top-8">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && inputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              pick(e.dataTransfer.files[0]);
+            }}
+            className={`mt-6 flex min-h-48 cursor-pointer sm:min-h-64 lg:mt-0 lg:min-h-80 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition ${
+              dragging ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950" : "border-neutral-300 dark:border-neutral-700"
+            }`}
+          >
+            {preview ? (
+              // eslint-disable-next-line @next/next/no-img-element -- local blob preview
+              <img src={preview} alt="선택한 요리 사진" className="max-h-80 w-full object-contain sm:max-h-96 lg:max-h-[32rem]" />
+            ) : (
+              <div className="p-6 text-center text-neutral-500">
+                <div className="text-4xl">📷</div>
+                <div className="mt-2">사진을 찍거나 선택해 주세요</div>
+                <div className="text-xs">드래그해서 놓아도 됩니다 · JPG/PNG/WEBP/HEIC, 최대 8MB</div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => pick(e.target.files?.[0])}
-      />
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => pick(e.target.files?.[0])}
+          />
 
-      <button
-        onClick={analyze}
-        disabled={!file || state.kind === "loading"}
-        className="mt-4 w-full rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {state.kind === "loading" ? "분석 중…" : "분석하기"}
-      </button>
+          <button
+            onClick={analyze}
+            disabled={!file || state.kind === "loading"}
+            className="mt-4 w-full rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {state.kind === "loading" ? "분석 중…" : "분석하기"}
+          </button>
 
-      {state.kind === "error" && (
-        <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {state.message}
+          {state.kind === "error" && (
+            <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+              {state.message}
+            </div>
+          )}
         </div>
-      )}
 
-      {state.kind === "done" && <ResultView r={state.result} />}
+        <div>
+          {state.kind === "done" ? (
+            <ResultView r={state.result} />
+          ) : (
+            <div className="hidden min-h-80 items-center justify-center rounded-2xl border border-neutral-200 p-6 text-center text-neutral-400 lg:flex dark:border-neutral-800">
+              {state.kind === "loading" ? "사진을 분석하고 있습니다…" : "분석 결과가 여기에 표시됩니다"}
+            </div>
+          )}
+        </div>
+      </div>
 
       <footer className="mt-10 text-center text-xs text-neutral-500">
         영양 수치는 AI 추정치이며 실제와 다를 수 있습니다 (출처: Gemini 추정)
@@ -117,7 +130,7 @@ export default function Home() {
 function ResultView({ r }: { r: AnalysisResult }) {
   if (!r.isFood) {
     return (
-      <div className="mt-6 rounded-2xl bg-amber-50 p-5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+      <div className="mt-6 rounded-2xl bg-amber-50 p-5 lg:mt-0 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
         음식 사진이 아닌 것 같습니다. 요리가 잘 보이게 다시 찍어 주세요.
       </div>
     );
@@ -127,9 +140,9 @@ function ResultView({ r }: { r: AnalysisResult }) {
   const n = r.nutrition;
 
   return (
-    <section className="mt-6 space-y-4">
-      <div className="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
-        <div className="flex items-baseline justify-between gap-2">
+    <section className="mt-6 space-y-4 lg:mt-0">
+      <div className="rounded-2xl border border-neutral-200 p-4 sm:p-5 dark:border-neutral-800">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
           <h2 className="text-xl font-bold">{r.dish.nameKo}</h2>
           <span className="text-sm text-neutral-500">{r.dish.nameEn}</span>
         </div>
@@ -154,9 +167,9 @@ function ResultView({ r }: { r: AnalysisResult }) {
         )}
       </div>
 
-      <div className="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
+      <div className="rounded-2xl border border-neutral-200 p-4 sm:p-5 dark:border-neutral-800">
         <div className="text-sm text-neutral-500">{r.servingAssumption}</div>
-        <div className="mt-1 text-4xl font-bold tabular-nums">
+        <div className="mt-1 text-3xl font-bold tabular-nums sm:text-4xl">
           {Math.round(n.calories)} <span className="text-lg font-medium">kcal</span>
         </div>
 
@@ -178,7 +191,7 @@ function ResultView({ r }: { r: AnalysisResult }) {
         </dl>
       </div>
 
-      <div className="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
+      <div className="rounded-2xl border border-neutral-200 p-4 sm:p-5 dark:border-neutral-800">
         <h3 className="font-semibold">영양 평가</h3>
         <p className="mt-2 text-sm">{r.assessment.summary}</p>
         {r.assessment.highlights.length > 0 && (
@@ -208,8 +221,9 @@ function Macro({ color, label, g, pct }: { color: string; label: string; g: numb
         <span className={`inline-block h-2 w-2 rounded-full ${color}`} />
         {label}
       </div>
+      {/* pct drops to its own line on narrow phones so the three columns don't overflow */}
       <div className="font-semibold tabular-nums">
-        {round1(g)} g <span className="font-normal text-neutral-500">{pct}%</span>
+        {round1(g)} g <span className="block font-normal text-neutral-500 min-[400px]:inline">{pct}%</span>
       </div>
     </div>
   );

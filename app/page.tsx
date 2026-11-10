@@ -17,6 +17,8 @@ export default function Home() {
   const [preview, setPreview] = useState<string | null>(null);
   const [state, setState] = useState<State>({ kind: "idle" });
   const [dragging, setDragging] = useState(false);
+  // Bumped per analysis so the result view (and any name edits/recipe in it) starts fresh.
+  const [runId, setRunId] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Release the last blob URL when the page unmounts.
@@ -40,6 +42,7 @@ export default function Home() {
       const res = await fetch("/api/analyze", { method: "POST", body });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `요청 실패 (${res.status})`);
+      setRunId((n) => n + 1);
       setState({ kind: "done", result: json });
     } catch (e) {
       setState({ kind: "error", message: e instanceof Error ? e.message : String(e) });
@@ -112,7 +115,7 @@ export default function Home() {
 
         <div>
           {state.kind === "done" ? (
-            <ResultView r={state.result} />
+            <ResultView key={runId} r={state.result} />
           ) : (
             <div className="hidden min-h-80 items-center justify-center rounded-2xl border border-neutral-200 p-6 text-center text-neutral-400 lg:flex dark:border-neutral-800">
               {state.kind === "loading" ? "사진을 분석하고 있습니다…" : "분석 결과가 여기에 표시됩니다"}
@@ -128,7 +131,16 @@ export default function Home() {
   );
 }
 
+const MAX_NAME = 50;
+
+type RecipeDish = { nameKo: string; nameEn?: string; servingAssumption?: string };
+
 function ResultView({ r }: { r: AnalysisResult }) {
+  // User-corrected dish name; null means the AI's name is used.
+  const [override, setOverride] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
   if (!r.isFood) {
     return (
       <div className="mt-6 rounded-2xl bg-amber-50 p-5 lg:mt-0 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
@@ -139,36 +151,133 @@ function ResultView({ r }: { r: AnalysisResult }) {
   const pct = Math.round(r.dish.confidence * 100);
   const low = r.dish.confidence < LOW_CONFIDENCE;
   const n = r.nutrition;
+  const corrected = override !== null;
+  const dish: RecipeDish = corrected
+    ? // The photo's serving description may name the misrecognized dish, so it isn't sent.
+      { nameKo: override }
+    : { nameKo: r.dish.nameKo, nameEn: r.dish.nameEn, servingAssumption: r.servingAssumption };
+
+  function startEdit() {
+    setDraft(override ?? r.dish.nameKo);
+    setEditing(true);
+  }
+
+  function save() {
+    const v = draft.trim().slice(0, MAX_NAME);
+    if (!v) return;
+    setOverride(v === r.dish.nameKo ? null : v);
+    setEditing(false);
+  }
 
   return (
     <section className="mt-6 space-y-4 lg:mt-0">
       <div className="rounded-2xl border border-neutral-200 p-4 sm:p-5 dark:border-neutral-800">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-          <h2 className="text-xl font-bold">{r.dish.nameKo}</h2>
-          <span className="text-sm text-neutral-500">{r.dish.nameEn}</span>
-        </div>
-        <div className="mt-3 flex items-center gap-2 text-sm">
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
-            <div
-              className={`h-full ${low ? "bg-amber-500" : "bg-emerald-500"}`}
-              style={{ width: `${pct}%` }}
+        {editing ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              save();
+            }}
+            className="flex flex-wrap gap-2"
+          >
+            <input
+              autoFocus
+              value={draft}
+              maxLength={MAX_NAME}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setEditing(false)}
+              aria-label="요리 이름"
+              placeholder="요리 이름을 입력해 주세요"
+              className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-lg font-bold outline-none focus:border-emerald-500 dark:border-neutral-700"
             />
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={!draft.trim()}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                저장
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
+              >
+                취소
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-xl font-bold">{dish.nameKo}</h2>
+              <button
+                onClick={startEdit}
+                className="text-sm text-neutral-500 underline-offset-2 hover:text-emerald-600 hover:underline"
+              >
+                ✏️ 이름 고치기
+              </button>
+            </div>
+            {!corrected && <span className="text-sm text-neutral-500">{r.dish.nameEn}</span>}
           </div>
-          <span className="whitespace-nowrap tabular-nums">
-            신뢰도 {pct}%{low && " · 확실하지 않음"}
-          </span>
-        </div>
+        )}
+
+        {corrected ? (
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500">
+            <span>
+              직접 고친 이름입니다 · AI 인식: {r.dish.nameKo} ({pct}%)
+            </span>
+            <button
+              onClick={() => setOverride(null)}
+              className="underline underline-offset-2 hover:text-emerald-600"
+            >
+              되돌리기
+            </button>
+          </div>
+        ) : (
+          <div className="mt-3 flex items-center gap-2 text-sm">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+              <div
+                className={`h-full ${low ? "bg-amber-500" : "bg-emerald-500"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="whitespace-nowrap tabular-nums">
+              신뢰도 {pct}%{low && " · 확실하지 않음"}
+            </span>
+          </div>
+        )}
+
         {r.alternatives.length > 0 && (
-          <div className="mt-3 text-sm text-neutral-500">
-            다른 후보:{" "}
-            {r.alternatives
-              .map((a) => `${a.nameKo} (${Math.round(a.confidence * 100)}%)`)
-              .join(", ")}
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-neutral-500">
+            <span>다른 후보:</span>
+            {r.alternatives.map((a) => (
+              <button
+                key={a.nameKo}
+                onClick={() => {
+                  setOverride(a.nameKo === r.dish.nameKo ? null : a.nameKo);
+                  setEditing(false);
+                }}
+                aria-pressed={override === a.nameKo}
+                className={`rounded-full border px-3 py-1 transition ${
+                  override === a.nameKo
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                    : "border-neutral-300 hover:border-emerald-500 dark:border-neutral-700"
+                }`}
+              >
+                {a.nameKo} ({Math.round(a.confidence * 100)}%)
+              </button>
+            ))}
           </div>
         )}
       </div>
 
       <div className="rounded-2xl border border-neutral-200 p-4 sm:p-5 dark:border-neutral-800">
+        {corrected && (
+          <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            영양 정보는 사진 분석 기준입니다 (AI 인식: {r.dish.nameKo}). 이름을 고쳐도 다시 계산되지 않습니다.
+          </div>
+        )}
         <div className="text-sm text-neutral-500">{r.servingAssumption}</div>
         <div className="mt-1 text-3xl font-bold tabular-nums sm:text-4xl">
           {Math.round(n.calories)} <span className="text-lg font-medium">kcal</span>
@@ -212,8 +321,8 @@ function ResultView({ r }: { r: AnalysisResult }) {
         <div className="mt-3 text-xs text-neutral-400">모델: {r.model}</div>
       </div>
 
-      {/* Keyed by the analysis so a new photo clears the previous recipe. */}
-      <RecipeSection key={`${r.dish.nameKo}|${r.servingAssumption}`} r={r} />
+      {/* Keyed by name so correcting the dish clears a recipe made for the old name. */}
+      <RecipeSection key={dish.nameKo} dish={dish} />
     </section>
   );
 }
@@ -227,7 +336,7 @@ type RecipeState =
 const MIN_SERVINGS = 1;
 const MAX_SERVINGS = 10;
 
-function RecipeSection({ r }: { r: AnalysisResult }) {
+function RecipeSection({ dish }: { dish: RecipeDish }) {
   const [state, setState] = useState<RecipeState>({ kind: "idle" });
   // null until the user adjusts it, so the recipe first shows the amounts it was written for
   const [chosenServings, setServings] = useState<number | null>(null);
@@ -238,11 +347,7 @@ function RecipeSection({ r }: { r: AnalysisResult }) {
       const res = await fetch("/api/recipe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nameKo: r.dish.nameKo,
-          nameEn: r.dish.nameEn,
-          servingAssumption: r.servingAssumption,
-        }),
+        body: JSON.stringify(dish),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `요청 실패 (${res.status})`);
@@ -260,7 +365,7 @@ function RecipeSection({ r }: { r: AnalysisResult }) {
           disabled={state.kind === "loading"}
           className="w-full rounded-xl border border-emerald-600 py-3 font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
         >
-          {state.kind === "loading" ? "레시피를 만들고 있습니다…" : `🍳 ${r.dish.nameKo} 레시피 보기`}
+          {state.kind === "loading" ? "레시피를 만들고 있습니다…" : `🍳 ${dish.nameKo} 레시피 보기`}
         </button>
         {state.kind === "error" && (
           <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
